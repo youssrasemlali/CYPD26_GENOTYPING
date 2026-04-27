@@ -1,0 +1,305 @@
+---
+title: "Pmdf3_cleaning"
+format: html
+---
+
+```{r}
+# Key column mappings for this dataset:
+#   tissue type        -> QC_pass_ancestry (no tissue_type column)
+#   sex discrepancy    -> QC_pass_sexcheck (TRUE = pass, FALSE = fail)
+#   phenotype          -> phenotype (ALS / Control / Other)
+#   age at blood draw  -> NOT PRESENT (will skip)
+#   CYP2D6 unknown     -> Cyrius_phenotype == "unknown"
+#   cohort             -> cohort
+#   age at onset       -> age_at_onset_years
+#   survival time      -> survival_months
+#   event              -> survival_status (dead / alive)
+#   site of onset      -> site_of_onset (Spinal / Bulbar / Generalized / FTD)
+
+#   C9orf72 status     -> NOT PRESENT in this dataset
+
+library(dplyr)
+ 
+#helper function 
+log_step <- function(label, df_before, df_after) {
+  removed <- nrow(df_before) - nrow(df_after)
+  cat(sprintf("  [%-55s] removed: %4d | remaining: %5d\n",
+              label, removed, nrow(df_after)))
+}
+```
+
+
+```{r}
+# Load data
+df_raw <- read.csv("Turkey_CYP_data_PMDF3.csv", stringsAsFactors = FALSE)
+
+cat("=== RAW DATA ===\n")
+cat("Rows:", nrow(df_raw), "\n")
+cat("Columns:", ncol(df_raw), "\n\n")
+```
+```{r}
+
+# BLOCK 1: RISK ANALYSIS CLEANING
+# Steps:
+#   1. Keep samples passing ancestry QC
+#   2. Remove missing/non-ALS/Control phenotype
+#   3. Remove samples failing sex check
+#   4. Age at blood draw -- SKIPPED (column not present in this dataset)
+#   5. Remove unknown CYP2D6 genotypes
+#   6. Remove cohorts with only cases OR only controls
+
+cat("BLOCK 1: RISK ANALYSIS CLEANING\n")
+
+```
+
+```{r}
+df_risk <- df_raw
+
+# -- Step 1: Keep samples passing ancestry QC 
+# This dataset has no tissue_type column. Instead, QC_pass_ancestry flags
+# samples that pass the ancestry principal component check.
+df_before <- df_risk
+df_risk <- df_risk %>%
+  filter(QC_pass_ancestry == "TRUE")
+log_step("Keep samples passing ancestry QC", df_before, df_risk)
+
+# 3 removed
+
+```
+
+```{r}
+
+#  Step 2: Remove missing/non-ALS/Control phenotype 
+df_before <- df_risk
+df_risk <- df_risk %>%
+  filter(phenotype %in% c("ALS", "Control"))
+log_step("Remove missing phenotype (keep ALS and Control only)", df_before, df_risk)
+
+# 21 'Other', 1 missing
+```
+
+```{r}
+# Step 3: Remove samples failing sex check 
+# QC_pass_sexcheck == FALSE means reported sex does not match genetic sex
+df_before <- df_risk
+df_risk <- df_risk %>%
+  filter(QC_pass_sexcheck == "TRUE")
+log_step("Remove sex discrepancies (QC_pass_sexcheck)", df_before, df_risk)
+
+# 8 removed
+```
+
+```{r}
+# -- Step 4: Remove unknown CYP2D6 genotypes 
+df_before <- df_risk
+df_risk <- df_risk %>%
+  filter(!is.na(Cyrius_phenotype),
+         Cyrius_phenotype != "unknown",
+         Cyrius_phenotype != "")
+log_step("Remove unknown CYP2D6 effect genotypes", df_before, df_risk)
+
+# 22 removed
+```
+
+```{r}
+# -- Step 6: Remove cohorts with only cases OR only controls ------------------
+df_before <- df_risk
+cohort_counts <- df_risk %>%
+  group_by(cohort) %>%
+  summarise(
+    n_cases    = sum(phenotype == "ALS",     na.rm = TRUE),
+    n_controls = sum(phenotype == "Control", na.rm = TRUE)
+  ) %>%
+  filter(n_cases > 0 & n_controls > 0)
+
+df_risk <- df_risk %>%
+  filter(cohort %in% cohort_counts$cohort)
+log_step("Remove cohorts with only cases or only controls", df_before, df_risk)
+
+cat("\n>>> RISK DATASET FINAL SIZE:", nrow(df_risk), "rows\n\n")
+
+# 0 removed 
+```
+
+```{r}
+#Summary statistics
+
+colnames(df_risk)
+
+summary_table <- df_risk %>%
+  group_by(phenotype) %>%
+  summarise(
+    
+    # Sample size
+    n = n(),
+    
+    # Age (use blood draw if available, otherwise diagnosis)
+    mean_age = mean(age_at_diagnosis_years, na.rm = TRUE),
+    sd_age   = sd(age_at_diagnosis_years, na.rm = TRUE),
+    
+    # % Male
+    pct_male = mean(sex_at_birth == "Male", na.rm = TRUE) * 100,
+    
+    # CYP2D6 *4 allele frequency
+    cyp2d6_4_freq = mean(
+      Allele1 == "*4" | Allele2 == "*4",
+      na.rm = TRUE
+    ),
+    
+    # Metaboliser phenotype percentages
+        pct_PM = round(mean(Cyrius_phenotype == "PM",         na.rm = TRUE) * 100, 1),
+    pct_IM = round(mean(Cyrius_phenotype == "IM", na.rm = TRUE) * 100, 1),
+    pct_NM = round(mean(Cyrius_phenotype == "NM",       na.rm = TRUE) * 100, 1),
+    pct_UM = round(mean(Cyrius_phenotype == "UM",   na.rm = TRUE) * 100, 1)
+  )
+
+summary_table <- summary_table %>%
+  mutate(
+    mean_age = round(mean_age, 1),
+    sd_age   = round(sd_age, 1),
+    pct_male = round(pct_male, 1),
+    cyp2d6_4_freq = round(cyp2d6_4_freq, 3),
+    pct_PM = round(pct_PM, 1),
+    pct_IM = round(pct_IM, 1),
+    pct_NM = round(pct_NM, 1),
+    pct_UM = round(pct_UM, 1)
+  )
+print(summary_table)
+```
+
+```{r}
+summary_table <- df_risk %>%
+  group_by(phenotype) %>%
+  summarise(
+    n = n(),
+    # Use age_at_onset for ALS, age_at_survival_check for controls
+    mean_age = round(mean(coalesce(age_at_onset_years, 
+                                   age_at_survival_check_years), na.rm = TRUE), 1),
+    sd_age   = round(sd(coalesce(age_at_onset_years, 
+                                  age_at_survival_check_years), na.rm = TRUE), 1),
+    
+    # % Male
+    pct_male = round(mean(sex_at_birth == "male", na.rm = TRUE) * 100, 1),
+    
+    #CYP2D6*4 allele frequency
+    cyp2d6_4_freq = round(mean(Allele1 == "*4" | Allele2 == "*4", na.rm = TRUE), 3),
+    
+    #Metaboliser phenotype percentages
+    pct_PM = round(mean(Cyrius_phenotype == "PM", na.rm = TRUE) * 100, 1),
+    pct_IM = round(mean(Cyrius_phenotype == "IM", na.rm = TRUE) * 100, 1),
+    pct_NM = round(mean(Cyrius_phenotype == "NM", na.rm = TRUE) * 100, 1),
+    pct_UM = round(mean(Cyrius_phenotype == "UM", na.rm = TRUE) * 100, 1)
+  )
+
+print(summary_table)
+```
+
+
+```{r}
+# Survival Analysis 
+df_survival <- df_raw
+
+# Step 1: Keep samples passing ancestry QC
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(QC_pass_ancestry == "TRUE")
+log_step("Keep samples passing ancestry QC", df_before, df_survival)
+
+```
+
+```{r}
+# Step 2: Keep ALS cases only
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(phenotype == "ALS")
+log_step("Keep ALS cases only (remove controls)", df_before, df_survival)
+```
+
+```{r}
+# -- Step 3: Remove samples failing sex check 
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(QC_pass_sexcheck == "TRUE")
+log_step("Remove sex discrepancies (QC_pass_sexcheck)", df_before, df_survival)
+```
+
+```{r}
+# Step 4: Remove missing age at onset 
+
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(!is.na(age_at_onset_years) & age_at_onset_years != "")
+log_step("Remove missing age at onset", df_before, df_survival)
+```
+
+```{r}
+# -- Step 5: Remove missing survival information 
+# survival_months = time to event; survival_status = dead/alive (event indicator)
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(!is.na(survival_months) & survival_months != "",
+         !is.na(survival_status) & survival_status != "")
+log_step("Remove missing survival information", df_before, df_survival)
+```
+
+```{r}
+# -- Step 6: Remove unknown CYP2D6 genotypes 
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(!is.na(Cyrius_phenotype),
+         Cyrius_phenotype != "unknown",
+         Cyrius_phenotype != "")
+log_step("Remove unknown CYP2D6 effect genotypes", df_before, df_survival)
+```
+
+```{r}
+# -- Step 7: Remove site of onset == FTD 
+df_before <- df_survival
+df_survival <- df_survival %>%
+  filter(is.na(site_of_onset) | site_of_onset != "FTD")
+log_step("Remove site of onset == FTD", df_before, df_survival)
+
+cat("\n>>> OVERALL SURVIVAL DATASET FINAL SIZE:", nrow(df_survival), "rows\n\n")
+```
+
+```{r}
+
+#Summary statistics
+
+survival_table <- df_survival %>%
+  group_by(phenotype) %>%
+  summarise(
+    
+    # Sample size
+    n = n(),
+    
+    # Use age_at_onset for ALS
+    mean_age = round(mean(coalesce(age_at_onset_years,
+                                   age_at_survival_check_years), na.rm = TRUE), 1),
+    sd_age   = round(sd(coalesce(age_at_onset_years,
+                                  age_at_survival_check_years), na.rm = TRUE), 1),
+    # % Male
+    pct_male = round(mean(sex_at_birth == "male", na.rm = TRUE) * 100, 1),
+    
+    # CYP2D6 *4 allele frequency
+    cyp2d6_4_freq = round(mean(Allele1 == "*4" | Allele2 == "*4", na.rm = TRUE), 3),
+    
+    # Metaboliser phenotype percentages
+    pct_PM = round(mean(Cyrius_phenotype == "PM", na.rm = TRUE) * 100, 1),
+    pct_IM = round(mean(Cyrius_phenotype == "IM", na.rm = TRUE) * 100, 1),
+    pct_NM = round(mean(Cyrius_phenotype == "NM", na.rm = TRUE) * 100, 1),
+    pct_UM = round(mean(Cyrius_phenotype == "UM", na.rm = TRUE) * 100, 1)
+  )
+
+print(survival_table)
+```
+
+```{r}
+# SAVE CLEANED DATASETS
+write.csv(df_risk,     "PMDF3_risk_cleaned.csv",     row.names = FALSE)
+write.csv(df_survival, "PMDF3_survival_cleaned.csv",  row.names = FALSE)
+
+table(df_risk$site_of_onset, useNA = "always")
+table(df_survival$site_of_onset, useNA = "always")
+```
+

@@ -1,0 +1,310 @@
+---
+title: "Pmdf3_cox"
+format: html
+---
+
+```{r}
+#load relevant libraries 
+library(survival)
+install.packages("survminer")
+library(survminer)
+library(grid)
+library(dplyr)
+```
+
+
+```{r}
+# Check riluzole column in turkey_data
+table(turkey_data$Riluzole_use_at_time_of_blooddraw, useNA = "always")
+
+# Check how many survival IDs match turkey_data
+cat("IDs matching:", sum(df_survival$id_wgs_df2 %in% turkey_data$id_wgs_df2), "\n")
+cat("Total survival rows:", nrow(df_survival), "\n")
+```
+
+
+```{r}
+names(df_survival)[1:5]
+cat("Match via patient_id:", sum(df_survival$patient_id %in% turkey_data$patient_id), "\n")
+cat("Match via id_wgs_df2:", sum(df_survival$id_wgs_df2 %in% turkey_data$id_wgs_df2), "\n")
+cat("Match via IID:", sum(df_survival$IID %in% turkey_data$id_wgs_df2), "\n")
+```
+
+```{r}
+# STEP 1: Prepare variables
+df_survival <- read.csv("PMDF3_survival_cleaned.csv", stringsAsFactors = FALSE)
+
+riluzole_pcs <- turkey_data %>%
+  select(id_wgs_df2, Riluzole_use_at_time_of_blooddraw, PC1:PC20)
+
+df_survival <- df_survival %>%
+  left_join(riluzole_pcs, by = c("IID" = "id_wgs_df2")) %>%
+  mutate(
+    event          = ifelse(survival_status == "dead", 1, 0),
+    survival_years = survival_months / 12,
+    # Fix empty strings to NA then factor
+    site_of_onset  = na_if(site_of_onset, ""),
+    site_of_onset  = factor(site_of_onset,
+                            levels = c("Spinal", "Bulbar", "Generalized")),
+    sex_at_birth   = factor(sex_at_birth, levels = c("female", "male"))
+  )
+
+df_survival$Cyrius_phenotype <- factor(df_survival$Cyrius_phenotype,
+                                        levels = c("NM", "IM", "PM", "UM"))
+
+df_survival <- df_survival %>%
+  mutate(
+    metab_nonNM = factor(
+      ifelse(Cyrius_phenotype != "NM", "nonNM", "NM"),
+      levels = c("NM", "nonNM")
+    ),
+    metab_PMIM = factor(
+      case_when(
+        Cyrius_phenotype %in% c("PM", "IM") ~ "PM_IM",
+        Cyrius_phenotype == "NM"            ~ "NM",
+        TRUE                                ~ NA_character_
+      ),
+      levels = c("NM", "PM_IM")
+    )
+  )
+
+# Confirm site_of_onset is correct
+table(df_survival$site_of_onset, useNA = "always")
+```
+
+
+```{r}
+# Survival time and event
+cat("Survival time summary:\n")
+summary(df_survival$survival_months)
+
+cat("\nEvent values:\n")
+table(df_survival$survival_status, useNA = "always")
+
+cat("\nSite of onset:\n")
+table(df_survival$site_of_onset, useNA = "always")
+
+cat("\nC9orf72:\n")
+table(df_survival$C9ORF72_Status_consensus, useNA = "always")
+
+cat("\nCyrius phenotype:\n")
+table(df_survival$Cyrius_phenotype, useNA = "always")
+
+```
+
+```{r}
+# STEP 1: Prepare variables
+
+df_survival <- df_survival %>%
+  mutate(
+    event          = ifelse(survival_status == "dead", 1, 0),
+    survival_years = survival_months / 12,
+    site_of_onset  = ifelse(site_of_onset == "" | is.na(site_of_onset),
+                            NA, site_of_onset),
+    site_of_onset  = factor(site_of_onset,
+                            levels = c("Spinal", "Bulbar", "Generalized")),
+    sex_at_birth   = factor(sex_at_birth, levels = c("female", "male"))
+  )
+
+df_survival$Cyrius_phenotype <- factor(df_survival$Cyrius_phenotype,
+                                        levels = c("NM", "IM", "PM", "UM"))
+
+df_survival <- df_survival %>%
+  mutate(
+    metab_nonNM = factor(
+      ifelse(Cyrius_phenotype != "NM", "nonNM", "NM"),
+      levels = c("NM", "nonNM")
+    ),
+    metab_PMIM = factor(
+      case_when(
+        Cyrius_phenotype %in% c("PM", "IM") ~ "PM_IM",
+        Cyrius_phenotype == "NM"            ~ "NM",
+        TRUE                                ~ NA_character_
+      ),
+      levels = c("NM", "PM_IM")
+    )
+  )
+```
+
+```{r}
+# STEP 2: Define covariates
+
+pc_covariates <- paste0("PC", 1:5, collapse = " + ")
+base_covars   <- "age_at_onset_years + sex_at_birth + site_of_onset"
+all_covars    <- paste(base_covars, pc_covariates, sep = " + ")
+
+# STEP 3: Check proportional hazards assumption
+
+ph_test <- coxph(
+  Surv(survival_years, event) ~ Cyrius_phenotype +
+    age_at_onset_years + sex_at_birth + site_of_onset,
+  data = df_survival
+)
+cat("Proportional hazards test:\n")
+print(cox.zph(ph_test))
+
+table(df_survival$site_of_onset, useNA = "always")
+```
+```{r}
+# STEP 4: Run 5 primary Cox models (overall survival)
+
+# Simpler standard Cox model - PH assumption holds
+cox1 <- coxph(
+  as.formula(paste("Surv(survival_years, event) ~ metab_nonNM +", all_covars)),
+  data = df_survival %>% filter(!is.na(metab_nonNM))
+)
+
+cox2 <- coxph(
+  as.formula(paste("Surv(survival_years, event) ~ metab_PMIM +", all_covars)),
+  data = df_survival %>% filter(!is.na(metab_PMIM))
+)
+
+cox3 <- coxph(
+  as.formula(paste("Surv(survival_years, event) ~ Cyrius_phenotype +", all_covars)),
+  data = df_survival %>% filter(Cyrius_phenotype %in% c("NM", "IM"))
+)
+
+cox4 <- coxph(
+  as.formula(paste("Surv(survival_years, event) ~ Cyrius_phenotype +", all_covars)),
+  data = df_survival %>% filter(Cyrius_phenotype %in% c("NM", "PM"))
+)
+
+cox5 <- coxph(
+  as.formula(paste("Surv(survival_years, event) ~ Cyrius_phenotype +", all_covars)),
+  data = df_survival %>% filter(Cyrius_phenotype %in% c("NM", "UM"))
+)
+
+cat("M1 converged:", cox1$iter < 25, "\n")
+cat("M2 converged:", cox2$iter < 25, "\n")
+cat("M3 converged:", cox3$iter < 25, "\n")
+cat("M4 converged:", cox4$iter < 25, "\n")
+cat("M5 converged:", cox5$iter < 25, "\n")
+```
+```{r}
+# Extract results
+
+extract_hr <- function(model, term, label) {
+  coef_table <- summary(model)$coefficients
+  if (!term %in% rownames(coef_table)) {
+    return(data.frame(comparison = label, HR = NA, CI_low = NA,
+                      CI_high = NA, p_value = NA))
+  }
+  est  <- coef_table[term, "coef"]
+  se   <- coef_table[term, "se(coef)"]
+  pval <- coef_table[term, "Pr(>|z|)"]
+  data.frame(
+    comparison = label,
+    HR         = round(exp(est), 2),
+    CI_low     = round(exp(est - 1.96 * se), 2),
+    CI_high    = round(exp(est + 1.96 * se), 2),
+    p_value    = round(pval, 4)
+  )
+}
+
+survival_results <- rbind(
+  extract_hr(cox1, "metab_nonNMnonNM",   "Any non-NM vs NM"),
+  extract_hr(cox2, "metab_PMIMPM_IM",    "PM + IM vs NM"),
+  extract_hr(cox3, "Cyrius_phenotypeIM", "IM vs NM"),
+  extract_hr(cox4, "Cyrius_phenotypePM", "PM vs NM"),
+  extract_hr(cox5, "Cyrius_phenotypeUM", "UM vs NM")
+)
+
+survival_results$FDR_adjusted_p <- round(
+  p.adjust(survival_results$p_value, method = "BH"), 4)
+
+cat("=============================================================\n")
+cat("OVERALL SURVIVAL RESULTS\n")
+cat("=============================================================\n")
+print(survival_results)
+```
+
+```{r}
+# PLOT 1: Forest plot - overall survival results
+tabletext <- cbind(
+  c("Comparison",          "Any non-NM vs NM",   "PM + IM vs NM",
+    "IM vs NM",            "PM vs NM",            "UM vs NM"),
+  c("HR (95% CI)",         "1.99 (0.89, 4.45)",  "1.90 (0.81, 4.43)",
+    "2.11 (0.87, 5.15)",   "1.21 (0.13, 11.10)", "4.44 (0.80, 24.51)"),
+  c("FDR q-value",         "0.1672",              "0.1734",
+    "0.1672",              "0.8661",              "0.1672")
+)
+ 
+mean_vals <- c(NA,   1.99,  1.90,  2.11,  1.21,  4.44)
+low_vals  <- c(NA,   0.89,  0.81,  0.87,  0.13,  0.80)
+high_vals <- c(NA,   4.45,  4.43,  5.15, 11.10, 24.51)
+ 
+png("forestplot_survival_turkey.png", width = 2800, height = 1600, res = 300)
+ 
+forestplot(
+  labeltext   = tabletext,
+  mean        = mean_vals,
+  lower       = low_vals,
+  upper       = high_vals,
+  zero        = 1,
+  xlog        = TRUE,
+  col         = fpColors(box = "black", line = "black", zero = "grey50"),
+  fn.ci_norm  = fpDrawDiamondCI,
+  boxsize     = 0.25,
+  lwd.zero    = 1.5,
+  lwd.ci      = 1.5,
+  ci.vertices = TRUE,
+  txt_gp      = fpTxtGp(
+    label = gpar(cex = 0.9),
+    ticks = gpar(cex = 0.85),
+    xlab  = gpar(cex = 0.9),
+    title = gpar(cex = 1.1, fontface = "bold")
+  ),
+  xlab      = "Hazard Ratio (95% CI)",
+  title     = "CYP2D6 metaboliser phenotype and ALS survival\nTurkey cohort — multivariable Cox regression",
+  graph.pos = 2
+)
+ 
+dev.off()
+cat("Saved: forestplot_survival_turkey.png\n")
+```
+
+```{r}
+# PLOT 2: Kaplan-Meier curves by metaboliser phenotype
+png("km_curve_overall.png", width = 1200, height = 800, res = 150)
+
+plot(km_fit,
+     col      = c("#2c3e50", "#2980b9", "#e74c3c", "#27ae60"),
+     lty      = 1,
+     lwd      = 2,
+     xlab     = "Time (years)",
+     ylab     = "Survival probability",
+     main     = "Kaplan-Meier survival curves by CYP2D6 metaboliser phenotype\nTurkey cohort — ALS cases",
+     mark.time = TRUE,
+     xlim     = c(0, 15),
+     ylim     = c(0, 1))
+
+legend("bottomleft",
+       legend = c("NM - 360", "IM - 185", "PM - 19", "UM - 26"),
+       col    = c("#2c3e50", "#2980b9", "#e74c3c", "#27ae60"),
+       lty    = 1,
+       lwd    = 2,
+       title  = "Metaboliser phenotype",
+       bty    = "n")
+
+dev.off()
+```
+
+```{r}
+cat("\nSurvival analysis sample sizes:\n")
+cat("Any non-NM vs NM:", nrow(df_survival %>% filter(!is.na(metab_nonNM))), "\n")
+cat("PM + IM vs NM:   ", nrow(df_survival %>% filter(!is.na(metab_PMIM))), "\n")
+cat("IM vs NM:        ", nrow(df_survival %>% filter(Cyrius_phenotype %in% c("NM", "IM"))), "\n")
+cat("PM vs NM:        ", nrow(df_survival %>% filter(Cyrius_phenotype %in% c("NM", "PM"))), "\n")
+cat("UM vs NM:        ", nrow(df_survival %>% filter(Cyrius_phenotype %in% c("NM", "UM"))), "\n")
+
+# Overall survival dataset
+cat("Overall survival dataset (n=590):\n")
+table(df_survival$Cyrius_phenotype, useNA = "always")
+
+# Events per phenotype
+cat("\nEvents (deaths) per phenotype:\n")
+table(df_survival$Cyrius_phenotype, df_survival$event, useNA = "always")
+```
+```{r}
+```
+

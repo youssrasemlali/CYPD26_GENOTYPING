@@ -1,0 +1,47 @@
+---
+title: "Riluzole subset analysis"
+format: html
+---
+
+
+
+```{r}
+#Riluzole subset analysis
+
+cat("Riluzole subset size:", nrow(df_riluzole), "\n")
+cat("Events per phenotype:\n")
+table(df_riluzole$Cyrius_phenotype, df_riluzole$event, useNA = "always")
+```
+
+
+```{r}
+# PLOT 4: Kaplan-Meier curves by riluzole use
+
+km_riluzole <- survfit(Surv(survival_years, event) ~ Cyrius_phenotype,
+                       data = df_riluzole)
+
+png("km_curve_riluzole.png", width = 1200, height = 800, res = 150)
+
+plot(km_riluzole,
+     col       = c("#2c3e50", "#2980b9", "#e74c3c", "#27ae60"),
+     lty       = 1,
+     lwd       = 2,
+     xlab      = "Time (years)",
+     ylab      = "Survival probability",
+     main      = "Kaplan-Meier survival curves by CYP2D6 metaboliser phenotype\nTurkey cohort — confirmed riluzole users",
+     mark.time = TRUE,
+     xlim      = c(0, 15),
+     ylim      = c(0, 1))
+
+legend("bottomleft",
+       legend = c("NM - 75", "IM - 37", "PM - 2", "UM - 9"),
+       col    = c("#2c3e50", "#2980b9", "#e74c3c", "#27ae60"),
+       lty    = 1,
+       lwd    = 2,
+       title  = "Metaboliser phenotype (n)",
+       bty    = "n")
+
+dev.off()
+
+```
+

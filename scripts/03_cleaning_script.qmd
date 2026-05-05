@@ -4,6 +4,9 @@ format: html
 ---
 
 ```{r}
+# Load required libraries 
+library(dplyr)
+
 # Key column mappings for this dataset:
 #   tissue type        -> QC_pass_ancestry (no tissue_type column)
 #   sex discrepancy    -> QC_pass_sexcheck (TRUE = pass, FALSE = fail)
@@ -18,7 +21,6 @@ format: html
 
 #   C9orf72 status     -> NOT PRESENT in this dataset
 
-library(dplyr)
  
 #helper function 
 log_step <- function(label, df_before, df_after) {

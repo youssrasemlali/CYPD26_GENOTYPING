@@ -1,8 +1,11 @@
+
+#load relevant libraries 
 install.packages("kableExtra")
 library(kableExtra)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+
 # TABLE 1: RISK ANALYSIS
 
 risk_table <- data.frame(

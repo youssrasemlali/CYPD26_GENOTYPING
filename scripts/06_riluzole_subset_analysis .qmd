@@ -3,7 +3,16 @@ title: "Riluzole subset analysis"
 format: html
 ---
 
+```{r}
+df_riluzole <- df_survival %>%
+  filter(Riluzole_use_at_time_of_blooddraw == "Y")
 
+cat("Riluzole subset size:", nrow(df_riluzole), "\n")
+cat("Events:", sum(df_riluzole$event, na.rm = TRUE), "\n")
+
+write.csv(df_riluzole, "PMDF3_riluzole_subset.csv", row.names = FALSE)
+cat("Saved: PMDF3_riluzole_subset.csv\n")
+```
 
 ```{r}
 #Riluzole subset analysis

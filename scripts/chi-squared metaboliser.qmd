@@ -1,0 +1,168 @@
+---
+title: "chi-squared metaboliser"
+format: html
+---
+
+
+```{r}
+#Load relevant libraries
+library(dplyr)
+
+# ── 1. Load Turkey data ──────────────────────────────────────
+df_risk <- read.csv("PMDF3_risk_cleaned.csv", stringsAsFactors = FALSE)
+
+get_turkey_counts <- function(group) {
+  df_risk %>%
+    filter(phenotype == group,
+           Cyrius_phenotype %in% c("PM", "IM", "NM", "UM")) %>%
+    { list(
+        counts = table(.$Cyrius_phenotype),
+        n      = nrow(.)
+      )}
+}
+ 
+turkey_als  <- get_turkey_counts("ALS")
+turkey_ctrl <- get_turkey_counts("Control")
+
+cat("Turkey ALS counts:\n");     print(turkey_als$counts);  cat("n =", turkey_als$n,  "\n\n")
+cat("Turkey Control counts:\n"); print(turkey_ctrl$counts); cat("n =", turkey_ctrl$n, "\n\n")
+ 
+```
+
+
+```{r}
+# ── 2. Published percentages from Vallikivi et al. Table 1 ───
+# UK:     ALS n=1219  %PM=7.1,  %IM=40.9, %NM=50.5, %UM=1.6
+#         Ctrl n=380  %PM=6.6,  %IM=37.9, %NM=53.4, %UM=2.1
+# France: ALS n=243   %PM=6.2,  %IM=35,   %NM=55.1, %UM=3.7
+#         Ctrl n=38   %PM=5.3,  %IM=23.7, %NM=68.4, %UM=2.6
+ 
+cohort_data <- list(
+  UK = list(
+    ALS     = list(n=1219, pct=c(PM=7.1,  IM=40.9, NM=50.5, UM=1.6)),
+    Control = list(n=380,  pct=c(PM=6.6,  IM=37.9, NM=53.4, UM=2.1))
+  ),
+  France = list(
+    ALS     = list(n=243,  pct=c(PM=6.2,  IM=35.0, NM=55.1, UM=3.7)),
+    Control = list(n=38,   pct=c(PM=5.3,  IM=23.7, NM=68.4, UM=2.6))
+  )
+)
+ 
+# Reconstruct counts from percentages
+for (cohort in names(cohort_data)) {
+  for (group in c("ALS", "Control")) {
+    d <- cohort_data[[cohort]][[group]]
+    counts <- round(d$n * d$pct / 100)
+    cohort_data[[cohort]][[group]]$counts <- counts
+    cat(sprintf("%s %s counts (reconstructed): ", cohort, group))
+    print(counts)
+    cat(sprintf("  Total: %d (published n=%d)\n\n", sum(counts), d$n))
+  }
+}
+```
+```{r}
+# ── 3. 2x2 chi-squared / Fisher function ─────────────────────
+run_2x2 <- function(pheno, t_counts, t_n, c_counts, c_n, comp_label, group_label) {
+  t_yes <- as.integer(t_counts[pheno])
+  t_no  <- t_n - t_yes
+  c_yes <- as.integer(c_counts[pheno])
+  c_no  <- c_n - c_yes
+ 
+  mat <- matrix(c(t_yes, t_no, c_yes, c_no),
+                nrow = 2, byrow = TRUE,
+                dimnames = list(
+                  c("Turkey", comp_label),
+                  c(pheno, paste0("non-", pheno))
+                ))
+ 
+  result  <- chisq.test(mat, correct = FALSE)
+  exp_min <- min(result$expected)
+ 
+  if (exp_min < 5) {
+    fisher <- fisher.test(mat)
+    p_val  <- fisher$p.value
+    test   <- "Fisher"
+    x2     <- NA
+  } else {
+    p_val  <- result$p.value
+    test   <- "Chi-sq"
+    x2     <- round(result$statistic, 3)
+  }
+ 
+  data.frame(
+    Group          = group_label,
+    Comparison     = paste("Turkey vs", comp_label),
+    Phenotype      = pheno,
+    Turkey_n       = t_yes,
+    Turkey_pct     = round(100 * t_yes / t_n, 1),
+    Comparison_n   = c_yes,
+    Comparison_pct = round(100 * c_yes / c_n, 1),
+    Test           = test,
+    X_squared      = x2,
+    p_value        = round(p_val, 4),
+    stringsAsFactors = FALSE
+  )
+}
+```
+
+```{r}
+# ── 4. Run all 32 tests ──────────────────────────────────────
+phenotypes   <- c("PM", "IM", "NM", "UM")
+groups       <- c("ALS", "Control")
+comparisons  <- c("UK", "France")
+turkey_data  <- list(ALS = turkey_als, Control = turkey_ctrl)
+ 
+results_list <- list()
+ 
+for (grp in groups) {
+  for (comp in comparisons) {
+    for (p in phenotypes) {
+      key <- paste(grp, comp, p, sep="_")
+      results_list[[key]] <- run_2x2(
+        pheno      = p,
+        t_counts   = turkey_data[[grp]]$counts,
+        t_n        = turkey_data[[grp]]$n,
+        c_counts   = cohort_data[[comp]][[grp]]$counts,
+        c_n        = cohort_data[[comp]][[grp]]$n,
+        comp_label = comp,
+        group_label = grp
+      )
+    }
+  }
+}
+ 
+results <- do.call(rbind, results_list)
+rownames(results) <- NULL
+```
+
+```{r}
+# ── 5. BH FDR correction across all 32 tests ─────────────────
+results$FDR_q <- round(p.adjust(results$p_value, method = "BH"), 4)
+ 
+# ── 6. Print results ─────────────────────────────────────────
+cat("\n========================================\n")
+cat("PER-PHENOTYPE 2x2 RESULTS — ALS\n")
+cat("========================================\n\n")
+print(results[results$Group == "ALS", ], row.names = FALSE)
+ 
+cat("\n========================================\n")
+cat("PER-PHENOTYPE 2x2 RESULTS — CONTROLS\n")
+cat("========================================\n\n")
+print(results[results$Group == "Control", ], row.names = FALSE)
+ 
+cat("\nSignificant results (FDR q < 0.05):\n")
+sig <- results[results$FDR_q < 0.05, ]
+if (nrow(sig) == 0) cat("  None\n") else print(sig, row.names = FALSE)
+
+```
+```{r}
+write.csv(results, "chisq_perphenotype_results.csv", row.names = FALSE)
+cat("\nResults saved to chisq_perphenotype_results.csv\n")
+```
+
+
+```{r}
+
+```
+
+

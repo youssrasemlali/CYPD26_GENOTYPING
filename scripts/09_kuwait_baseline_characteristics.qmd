@@ -13,8 +13,6 @@ getwd()
 
 
 ```{r}
-library(kableExtra)
-library(dplyr)
 
 # =============================================================
 # TABLE: KUWAIT COHORT BASELINE CHARACTERISTICS
@@ -84,8 +82,3 @@ baseline_html <- baseline_table %>%
 save_kable(baseline_html, "table_baseline_Kuwait.html")
 cat("Saved: table_baseline_Kuwait.html\n")
 ```
-
-```{r}
-
-```
-

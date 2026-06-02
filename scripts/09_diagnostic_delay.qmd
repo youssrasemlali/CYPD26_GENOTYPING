@@ -1,0 +1,89 @@
+---
+title: "kuwait_diagnostic_delay"
+format: html
+---
+
+```{r}
+#load packages 
+library(dplyr)
+library(ggplot2)
+
+kuwait <- read.csv("kuwait_merged_final.csv", stringsAsFactors = FALSE)
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+# --- Shared data prep ---
+kuwait_plot <- kuwait %>%
+  filter(Cyrius_phenotype != "unknown",
+         !is.na(diagnostic_delay_months)) %>%
+  mutate(
+    Cyrius_phenotype = factor(Cyrius_phenotype, levels = c("NM", "IM", "PM", "UM")),
+    case_id = row_number()
+  )
+
+# --- Plot 1: Lollipop ---
+p1 <- ggplot(kuwait_plot, aes(x = diagnostic_delay_months,
+                               y = reorder(as.character(Sample), diagnostic_delay_months),
+                               colour = Cyrius_phenotype)) +
+  geom_point(size = 4) +
+  geom_segment(aes(x = 0, xend = diagnostic_delay_months,
+                   yend = reorder(as.character(Sample), diagnostic_delay_months)),
+               linewidth = 0.5, linetype = "dashed", colour = "grey70") +
+  scale_colour_manual(
+    values = c("NM" = "#2c3e50", "IM" = "#2980b9", "PM" = "#e74c3c", "UM" = "#27ae60"),
+    name = "Metaboliser\nphenotype"
+  ) +
+  scale_x_continuous(breaks = seq(0, 48, 12)) +
+  labs(
+    title = "Diagnostic delay by CYP2D6 metaboliser phenotype",
+    subtitle = "Kuwait cohort — ALS cases",
+    x = "Time to diagnosis (months)",
+    y = "ALS case"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 10, colour = "grey40"),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(size = 9),
+    legend.position = "right"
+  )
+
+# --- Plot 2: ECDF ---
+kuwait_ecdf <- kuwait_plot %>%
+  arrange(diagnostic_delay_months) %>%
+  mutate(
+    n_total = n(),
+    rank = row_number(),
+    prop_undiagnosed = 1 - (rank / n_total)
+  )
+
+time_zero <- tibble(diagnostic_delay_months = 0, prop_undiagnosed = 1)
+final_drop <- tibble(diagnostic_delay_months = c(48, 48), prop_undiagnosed = c(1/18, 0))
+plot_data <- bind_rows(time_zero, kuwait_ecdf, final_drop)
+
+p2 <- ggplot(plot_data, aes(x = diagnostic_delay_months, y = prop_undiagnosed)) +
+  geom_step(linewidth = 0.9, colour = "#2166AC") +
+  scale_x_continuous(
+    name = "Diagnostic delay (months)",
+    breaks = seq(0, 48, by = 12),
+    limits = c(0, 54)
+  ) +
+  scale_y_continuous(
+    name = "Proportion undiagnosed",
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2)
+  ) +
+  labs(
+    title = "Time to ALS diagnosis",
+    subtitle = "Kuwait cohort — descriptive only (n=18)"
+  ) +
+  theme_classic(base_size = 13)
+
+# --- Combine and save ---
+p1 + p2 + plot_annotation(tag_levels = "A")
+
+ggsave("kuwait_diagnostic_delay_combined.png", width = 14, height = 6, dpi = 300)
+```

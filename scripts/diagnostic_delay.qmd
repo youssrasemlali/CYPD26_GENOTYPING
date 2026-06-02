@@ -1,0 +1,309 @@
+---
+title: "kuwait_diagnostic_delay"
+format: html
+---
+
+```{r}
+#load packages 
+library(dplyr)
+library(ggplot2)
+
+kuwait <- read.csv("kuwait_merged_final.csv", stringsAsFactors = FALSE)
+
+kuwait <- kuwait %>%
+  mutate(
+    diagnostic_delay = age_at_diagnosis - age_at_onset
+  )
+
+cat("Diagnostic delay summary:\n")
+summary(kuwait$diagnostic_delay)
+
+cat("\nBy metaboliser phenotype:\n")
+kuwait %>%
+  group_by(Cyrius_phenotype) %>%
+  summarise(
+    n             = n(),
+    mean_delay    = round(mean(diagnostic_delay, na.rm = TRUE), 1),
+    sd_delay      = round(sd(diagnostic_delay, na.rm = TRUE), 1),
+    median_delay  = round(median(diagnostic_delay, na.rm = TRUE), 1)
+  )
+```
+
+
+```{r}
+#diagnostic delay in yrs
+kuwait %>%
+  select(Sample, age_at_onset, age_at_diagnosis, diagnostic_delay) %>%
+  print(n = 20)
+```
+
+```{r}
+#diagnosic delay in months 
+
+kuwait <- kuwait %>%
+  mutate(
+    diagnostic_delay_years  = age_at_diagnosis - age_at_onset,
+    diagnostic_delay_months = diagnostic_delay_years * 12
+  )
+
+cat("Diagnostic delay in months:\n")
+summary(kuwait$diagnostic_delay_months)
+
+cat("\nBy metaboliser phenotype (months):\n")
+kuwait %>%
+  group_by(Cyrius_phenotype) %>%
+  summarise(
+    n              = n(),
+    mean_delay     = round(mean(diagnostic_delay_months, na.rm = TRUE), 1),
+    sd_delay       = round(sd(diagnostic_delay_months, na.rm = TRUE), 1),
+    median_delay   = round(median(diagnostic_delay_months, na.rm = TRUE), 1),
+    min_delay      = min(diagnostic_delay_months, na.rm = TRUE),
+    max_delay      = max(diagnostic_delay_months, na.rm = TRUE)
+  )
+```
+
+```{r}
+# Remove unknown and missing
+kuwait_plot <- kuwait %>%
+  filter(Cyrius_phenotype != "unknown",
+         !is.na(diagnostic_delay_months)) %>%
+  mutate(
+    Cyrius_phenotype = factor(Cyrius_phenotype, levels = c("NM", "IM", "PM", "UM")),
+    case_id = row_number()
+  )
+
+ggplot(kuwait_plot, aes(x = diagnostic_delay_months, 
+                         y = reorder(as.character(Sample), diagnostic_delay_months),
+                         colour = Cyrius_phenotype)) +
+  geom_point(size = 4) +
+  geom_segment(aes(x = 0, xend = diagnostic_delay_months,
+                   yend = reorder(as.character(Sample), diagnostic_delay_months)),
+               linewidth = 0.5, linetype = "dashed", colour = "grey70") +
+  scale_colour_manual(
+    values = c("NM" = "#2c3e50", "IM" = "#2980b9", "PM" = "#e74c3c", "UM" = "#27ae60"),
+    name   = "Metaboliser\nphenotype"
+  ) +
+  scale_x_continuous(breaks = seq(0, 48, 12)) +
+  labs(
+    title    = "Diagnostic delay by CYP2D6 metaboliser phenotype",
+    subtitle = "Kuwait cohort — ALS cases",
+    x        = "Time to diagnosis (months)",
+    y        = "ALS case"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title     = element_text(face = "bold", size = 12),
+    plot.subtitle  = element_text(size = 10, colour = "grey40"),
+    axis.text.y    = element_text(size = 7),
+    axis.text.x    = element_text(size = 9),
+    legend.position = "right"
+  )
+
+ggsave("kuwait_diagnostic_delay.png", width = 9, height = 6, dpi = 300)
+```
+
+```{r}
+# Column names
+names(kuwait)
+
+# First few rows + column types
+glimpse(kuwait)
+```
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Prepare data
+kuwait_ecdf <- kuwait %>%
+  filter(
+    Cyrius_phenotype %in% c("NM", "IM"),  # excludes unknowns
+    !is.na(diagnostic_delay_months)        # excludes missing delay (the NA on row 8)
+  ) %>%
+  mutate(Cyrius_phenotype = factor(Cyrius_phenotype, levels = c("NM", "IM")))
+
+# Count n per group for labels
+n_labels <- kuwait_ecdf %>%
+  count(Cyrius_phenotype) %>%
+  mutate(label = paste0(Cyrius_phenotype, " (n=", n, ")"))
+
+# Build reverse ECDF (proportion NOT YET diagnosed)
+kuwait_ecdf <- kuwait_ecdf %>%
+  group_by(Cyrius_phenotype) %>%
+  arrange(diagnostic_delay_months) %>%
+  mutate(
+    rank = row_number(),
+    n_group = n(),
+    prop_undiagnosed = 1 - (rank / n_group)
+  ) %>%
+  ungroup()
+
+# Add time zero (proportion = 1 at delay = 0)
+time_zero <- kuwait_ecdf %>%
+  distinct(Cyrius_phenotype, n_group) %>%
+  mutate(diagnostic_delay_months = 0,
+         prop_undiagnosed = 1,
+         rank = 0)
+
+plot_data <- bind_rows(time_zero, kuwait_ecdf) %>%
+  arrange(Cyrius_phenotype, diagnostic_delay_months)
+
+# Plot
+ggplot(plot_data, aes(x = diagnostic_delay_months, y = prop_undiagnosed,
+                      colour = Cyrius_phenotype)) +
+  geom_step(linewidth = 0.9) +
+  scale_colour_manual(
+    values = c("NM" = "#2166AC", "IM" = "#D6604D"),
+    labels = n_labels$label
+  ) +
+  scale_x_continuous(
+    name = "Diagnostic delay (months)",
+    breaks = seq(0, 50, by = 12),
+    limits = c(0, 50)
+  ) +
+  scale_y_continuous(
+    name = "Proportion undiagnosed",
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2)
+  ) +
+  labs(
+    title = "Time to ALS diagnosis by CYP2D6 metaboliser phenotype",
+    subtitle = "Kuwait cohort — descriptive only (n=18)",
+    colour = "Metaboliser phenotype",
+    caption = "Reverse ECDF. Two cases excluded: unknown CYP2D6 phenotype (n=1) and missing diagnostic delay (n=1)."
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.85),
+    plot.caption = element_text(size = 8, colour = "grey50", hjust = 0)
+  )
+```
+
+```{r}
+
+# Prepare data
+kuwait_ecdf <- kuwait %>%
+  filter(
+    Cyrius_phenotype %in% c("NM", "IM"),
+    !is.na(diagnostic_delay_months)
+  ) %>%
+  arrange(diagnostic_delay_months) %>%
+  mutate(
+    n_total = n(),
+    rank = row_number(),
+    prop_undiagnosed = 1 - (rank / n_total)
+  )
+
+# Add time zero and final drop
+time_zero <- tibble(diagnostic_delay_months = 0, prop_undiagnosed = 1)
+final_drop <- tibble(diagnostic_delay_months = 48, prop_undiagnosed = 0)
+
+plot_data <- bind_rows(time_zero, kuwait_ecdf, final_drop)
+
+# Plot
+ggplot(plot_data, aes(x = diagnostic_delay_months, y = prop_undiagnosed)) +
+  geom_step(linewidth = 0.9, colour = "#2166AC") +
+  scale_x_continuous(
+    name = "Diagnostic delay (months)",
+    breaks = seq(0, 48, by = 12),
+    limits = c(0, 54)
+  ) +
+  scale_y_continuous(
+    name = "Proportion undiagnosed",
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2)
+  ) +
+  labs(
+    title = "Time to ALS diagnosis",
+    subtitle = "Kuwait cohort — descriptive only (n=18)"
+  ) +
+  theme_classic(base_size = 13)
+
+ggsave("kuwait_ecdf_diagnostic_delay.png", width = 7, height = 5, dpi = 300)
+
+```
+
+```{r}
+library(patchwork)
+
+# --- Shared data prep ---
+kuwait_plot <- kuwait %>%
+  filter(Cyrius_phenotype != "unknown",
+         !is.na(diagnostic_delay_months)) %>%
+  mutate(
+    Cyrius_phenotype = factor(Cyrius_phenotype, levels = c("NM", "IM", "PM", "UM")),
+    case_id = row_number()
+  )
+
+# --- Plot 1: Lollipop ---
+p1 <- ggplot(kuwait_plot, aes(x = diagnostic_delay_months,
+                               y = reorder(as.character(Sample), diagnostic_delay_months),
+                               colour = Cyrius_phenotype)) +
+  geom_point(size = 4) +
+  geom_segment(aes(x = 0, xend = diagnostic_delay_months,
+                   yend = reorder(as.character(Sample), diagnostic_delay_months)),
+               linewidth = 0.5, linetype = "dashed", colour = "grey70") +
+  scale_colour_manual(
+    values = c("NM" = "#2c3e50", "IM" = "#2980b9", "PM" = "#e74c3c", "UM" = "#27ae60"),
+    name = "Metaboliser\nphenotype"
+  ) +
+  scale_x_continuous(breaks = seq(0, 48, 12)) +
+  labs(
+    title = "Diagnostic delay by CYP2D6 metaboliser phenotype",
+    subtitle = "Kuwait cohort — ALS cases",
+    x = "Time to diagnosis (months)",
+    y = "ALS case"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 10, colour = "grey40"),
+    axis.text.y = element_text(size = 7),
+    axis.text.x = element_text(size = 9),
+    legend.position = "right"
+  )
+
+# --- Plot 2: ECDF ---
+kuwait_ecdf <- kuwait_plot %>%
+  arrange(diagnostic_delay_months) %>%
+  mutate(
+    n_total = n(),
+    rank = row_number(),
+    prop_undiagnosed = 1 - (rank / n_total)
+  )
+
+time_zero <- tibble(diagnostic_delay_months = 0, prop_undiagnosed = 1)
+final_drop <- tibble(diagnostic_delay_months = c(48, 48), prop_undiagnosed = c(1/18, 0))
+plot_data <- bind_rows(time_zero, kuwait_ecdf, final_drop)
+
+p2 <- ggplot(plot_data, aes(x = diagnostic_delay_months, y = prop_undiagnosed)) +
+  geom_step(linewidth = 0.9, colour = "#2166AC") +
+  scale_x_continuous(
+    name = "Diagnostic delay (months)",
+    breaks = seq(0, 48, by = 12),
+    limits = c(0, 54)
+  ) +
+  scale_y_continuous(
+    name = "Proportion undiagnosed",
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2)
+  ) +
+  labs(
+    title = "Time to ALS diagnosis",
+    subtitle = "Kuwait cohort — descriptive only (n=18)"
+  ) +
+  theme_classic(base_size = 13)
+
+# --- Combine and save ---
+p1 + p2 + plot_annotation(tag_levels = "A")
+
+ggsave("kuwait_diagnostic_delay_combined.png", width = 14, height = 6, dpi = 300)
+```
+
+```{r}
+```
+
+
+```{r}
+```
+

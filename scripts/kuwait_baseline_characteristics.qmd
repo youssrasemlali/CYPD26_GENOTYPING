@@ -1,0 +1,91 @@
+---
+title: "kuwait_baseline_characteristics"
+format: html
+---
+
+```{r}
+#Load relevant libraries
+library(kableExtra)
+library(dplyr)
+
+getwd()
+```
+
+
+```{r}
+library(kableExtra)
+library(dplyr)
+
+# =============================================================
+# TABLE: KUWAIT COHORT BASELINE CHARACTERISTICS
+# (excluding 2 unresolved phenotype samples, n = 18)
+# =============================================================
+baseline_table <- data.frame(
+  Characteristic = c(
+    "n",
+    "Age at blood draw, mean (SD)",
+    "Age at onset, mean (SD)",
+    "Male sex, % (n)",
+    "Site of onset, % (n)",
+    "  Spinal",
+    "  Bulbar",
+    "  Flail leg",
+    "CYP2D6 *4 allele frequency",
+    "Intermediate metaboliser (IM), %",
+    "Normal metaboliser (NM), %",
+    "Poor metaboliser (PM), %",
+    "Ultrarapid metaboliser (UM), %"
+  ),
+  ALS = c(
+    "18",
+    "58.3 (13.6)",
+    "52.2 (14.1)",
+    "60.0% (12)",
+    "",
+    "75.0% (15)",
+    "20.0% (4)",
+    "5.0% (1)",
+    "0.025",
+    "33.3% (6)",
+    "66.7% (12)",
+    "0.0% (0)",
+    "0.0% (0)"
+  )
+)
+
+baseline_html <- baseline_table %>%
+  kbl(
+    col.names = c("Characteristic", "ALS (n = 18)"),
+    align     = c("l", "c"),
+    caption   = "Table. Baseline characteristics of ALS cases - Kuwait cohort"
+  ) %>%
+  kable_classic(full_width = FALSE, html_font = "Cambria") %>%
+  column_spec(1, width = "12cm") %>%
+  column_spec(2, width = "4cm") %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(1, bold = TRUE, background = "#f5f5f5") %>%
+  pack_rows("Demographics", 2, 4) %>%
+  pack_rows("Clinical", 5, 8) %>%
+  pack_rows("CYP2D6 Genotype", 9, 9) %>%
+  pack_rows("CYP2D6 Metaboliser Phenotype", 10, 13) %>%
+  kableExtra::footnote(
+    general = c(
+      "SD - standard deviation.",
+      "2 samples with unresolved CYP2D6 phenotype excluded from analysis.",
+      "CYP2D6 *4 allele frequency estimated from genotype data.",
+      "PM - poor metaboliser, IM - intermediate metaboliser, NM - normal metaboliser, UM - ultrarapid metaboliser.",
+      "Age at onset missing for 1 sample."
+    ),
+    general_title     = "Note: ",
+    footnote_as_chunk = TRUE,
+    escape            = FALSE
+  )
+
+save_kable(baseline_html, "table_baseline_Kuwait.html")
+cat("Saved: table_baseline_Kuwait.html\n")
+```
+
+```{r}
+
+```
+

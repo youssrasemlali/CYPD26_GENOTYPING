@@ -1,0 +1,298 @@
+---
+title: "chi-squared metaboliser"
+format: html
+---
+
+```{r}
+#Per-phenotype vs UK/France 
+#Load relevant libraries
+library(dplyr)
+library(gt)
+
+# ── 1. Load Turkey data ──────────────────────────────────────
+df_risk <- read.csv("PMDF3_risk_cleaned.csv", stringsAsFactors = FALSE)
+
+get_turkey_counts <- function(group) {
+  df_risk %>%
+    filter(phenotype == group,
+           Cyrius_phenotype %in% c("PM", "IM", "NM", "UM")) %>%
+    { list(
+        counts = table(.$Cyrius_phenotype),
+        n      = nrow(.)
+      )}
+}
+ 
+turkey_als  <- get_turkey_counts("ALS")
+turkey_ctrl <- get_turkey_counts("Control")
+
+cat("Turkey ALS counts:\n");     print(turkey_als$counts);  cat("n =", turkey_als$n,  "\n\n")
+cat("Turkey Control counts:\n"); print(turkey_ctrl$counts); cat("n =", turkey_ctrl$n, "\n\n")
+ 
+```
+
+
+```{r}
+# ── 2. Published percentages from Vallikivi et al. Table 1 ───
+# UK:     ALS n=1219  %PM=7.1,  %IM=40.9, %NM=50.5, %UM=1.6
+#         Ctrl n=380  %PM=6.6,  %IM=37.9, %NM=53.4, %UM=2.1
+# France: ALS n=243   %PM=6.2,  %IM=35,   %NM=55.1, %UM=3.7
+#         Ctrl n=38   %PM=5.3,  %IM=23.7, %NM=68.4, %UM=2.6
+ 
+cohort_data <- list(
+  UK = list(
+    ALS     = list(n=1219, pct=c(PM=7.1,  IM=40.9, NM=50.5, UM=1.6)),
+    Control = list(n=380,  pct=c(PM=6.6,  IM=37.9, NM=53.4, UM=2.1))
+  ),
+  France = list(
+    ALS     = list(n=243,  pct=c(PM=6.2,  IM=35.0, NM=55.1, UM=3.7)),
+    Control = list(n=38,   pct=c(PM=5.3,  IM=23.7, NM=68.4, UM=2.6))
+  )
+)
+ 
+# Reconstruct counts from percentages
+for (cohort in names(cohort_data)) {
+  for (group in c("ALS", "Control")) {
+    d <- cohort_data[[cohort]][[group]]
+    counts <- round(d$n * d$pct / 100)
+    cohort_data[[cohort]][[group]]$counts <- counts
+    cat(sprintf("%s %s counts (reconstructed): ", cohort, group))
+    print(counts)
+    cat(sprintf("  Total: %d (published n=%d)\n\n", sum(counts), d$n))
+  }
+}
+```
+```{r}
+# ── 3. 2x2 chi-squared / Fisher function ─────────────────────
+run_2x2 <- function(pheno, t_counts, t_n, c_counts, c_n, comp_label, group_label) {
+  t_yes <- as.integer(t_counts[pheno])
+  t_no  <- t_n - t_yes
+  c_yes <- as.integer(c_counts[pheno])
+  c_no  <- c_n - c_yes
+ 
+  mat <- matrix(c(t_yes, t_no, c_yes, c_no),
+                nrow = 2, byrow = TRUE,
+                dimnames = list(
+                  c("Turkey", comp_label),
+                  c(pheno, paste0("non-", pheno))
+                ))
+ 
+  result  <- chisq.test(mat, correct = FALSE)
+  exp_min <- min(result$expected)
+ 
+  if (exp_min < 5) {
+    fisher <- fisher.test(mat)
+    p_val  <- fisher$p.value
+    test   <- "Fisher"
+    x2     <- NA
+  } else {
+    p_val  <- result$p.value
+    test   <- "Chi-sq"
+    x2     <- round(result$statistic, 3)
+  }
+ 
+  data.frame(
+    Group          = group_label,
+    Comparison     = paste("Turkey vs", comp_label),
+    Phenotype      = pheno,
+    Turkey_n       = t_yes,
+    Turkey_pct     = round(100 * t_yes / t_n, 1),
+    Comparison_n   = c_yes,
+    Comparison_pct = round(100 * c_yes / c_n, 1),
+    Test           = test,
+    X_squared      = x2,
+    p_value        = round(p_val, 4),
+    stringsAsFactors = FALSE
+  )
+}
+```
+
+```{r}
+# ── 4. Run all 32 tests ──────────────────────────────────────
+phenotypes   <- c("PM", "IM", "NM", "UM")
+groups       <- c("ALS", "Control")
+comparisons  <- c("UK", "France")
+turkey_data  <- list(ALS = turkey_als, Control = turkey_ctrl)
+ 
+results_list <- list()
+ 
+for (grp in groups) {
+  for (comp in comparisons) {
+    for (p in phenotypes) {
+      key <- paste(grp, comp, p, sep="_")
+      results_list[[key]] <- run_2x2(
+        pheno      = p,
+        t_counts   = turkey_data[[grp]]$counts,
+        t_n        = turkey_data[[grp]]$n,
+        c_counts   = cohort_data[[comp]][[grp]]$counts,
+        c_n        = cohort_data[[comp]][[grp]]$n,
+        comp_label = comp,
+        group_label = grp
+      )
+    }
+  }
+}
+ 
+results <- do.call(rbind, results_list)
+rownames(results) <- NULL
+```
+
+```{r}
+# ── 5. BH FDR correction across all 32 tests ─────────────────
+results$FDR_q <- round(p.adjust(results$p_value, method = "BH"), 4)
+ 
+# ── 6. Print results ─────────────────────────────────────────
+cat("\n========================================\n")
+cat("PER-PHENOTYPE 2x2 RESULTS — ALS\n")
+cat("========================================\n\n")
+print(results[results$Group == "ALS", ], row.names = FALSE)
+ 
+cat("\n========================================\n")
+cat("PER-PHENOTYPE 2x2 RESULTS — CONTROLS\n")
+cat("========================================\n\n")
+print(results[results$Group == "Control", ], row.names = FALSE)
+ 
+cat("\nSignificant results (FDR q < 0.05):\n")
+sig <- results[results$FDR_q < 0.05, ]
+if (nrow(sig) == 0) cat("  None\n") else print(sig, row.names = FALSE)
+
+```
+```{r}
+write.csv(results, "chisq_perphenotype_results.csv", row.names = FALSE)
+cat("\nResults saved to chisq_perphenotype_results.csv\n")
+```
+
+
+```{r}
+#Omnibus vs pooled European
+# Check counts in risk dataset
+cat("Turkey RISK dataset counts:\n")
+cat("ALS cases:\n")
+df_risk %>%
+  filter(phenotype == "ALS") %>%
+  count(Cyrius_phenotype)
+
+cat("\nControls:\n")
+df_risk %>%
+  filter(phenotype == "Control") %>%
+  count(Cyrius_phenotype)
+
+cat("Turkey ALS cases:\n")
+df_risk %>%
+  filter(phenotype == "ALS") %>%
+  count(Cyrius_phenotype)
+
+cat("\nTurkey controls:\n")
+df_risk %>%
+  filter(phenotype == "Control") %>%
+  count(Cyrius_phenotype)
+```
+
+```{r}
+# =============================================================
+# Chi-squared goodness of fit test
+# Turkey ALS cases and controls vs published European frequencies
+# Source: Vallikivi et al. Table 1 (across cohorts)
+# ALS:      PM=6.9%,  IM=41.5%, NM=49.4%, UM=2.2%
+# Controls: PM=6.2%,  IM=39.6%, NM=52.5%, UM=1.7%
+# =============================================================
+
+# ── ALS cases ─────────────────────────────────────────────────
+observed_als <- c(IM = 187, NM = 368, PM = 20, UM = 26)
+expected_als <- c(IM = 0.415, NM = 0.494, PM = 0.069, UM = 0.022)
+
+cat("=== ALS CASES ===\n")
+cat("Turkey observed vs European expected:\n")
+data.frame(
+  Phenotype    = names(observed_als),
+  Observed_n   = observed_als,
+  Observed_pct = round(observed_als / sum(observed_als) * 100, 1),
+  Expected_pct = expected_als * 100
+) %>% print()
+
+chi_als <- chisq.test(observed_als, p = expected_als)
+cat("\nChi-squared goodness of fit:\n")
+print(chi_als)
+
+# ── Controls ──────────────────────────────────────────────────
+observed_ctrl <- c(IM = 47, NM = 89, PM = 4, UM = 4)
+expected_ctrl <- c(IM = 0.396, NM = 0.525, PM = 0.062, UM = 0.017)
+
+cat("\n=== CONTROLS ===\n")
+cat("Turkey observed vs European expected:\n")
+data.frame(
+  Phenotype    = names(observed_ctrl),
+  Observed_n   = observed_ctrl,
+  Observed_pct = round(observed_ctrl / sum(observed_ctrl) * 100, 1),
+  Expected_pct = expected_ctrl * 100
+) %>% print()
+
+chi_ctrl <- chisq.test(observed_ctrl, p = expected_ctrl)
+cat("\nChi-squared goodness of fit:\n")
+print(chi_ctrl)
+```
+
+```{r}
+cat("ALS chi-squared:\n")
+print(chi_als)
+
+cat("\nControls chi-squared:\n")
+print(chi_ctrl)
+```
+
+```{r}
+results_gt <- data.frame(
+  Group      = c("ALS cases", "Controls"),
+  Turkey_NM  = c("61.2%", "61.8%"),
+  Europe_NM  = c("49.4%", "52.5%"),
+  Turkey_IM  = c("31.1%", "32.6%"),
+  Europe_IM  = c("41.5%", "39.6%"),
+  Turkey_PM  = c("3.3%", "2.8%"),
+  Europe_PM  = c("6.9%", "6.2%"),
+  Turkey_UM  = c("4.3%", "2.8%"),
+  Europe_UM  = c("2.2%", "1.7%"),
+  X2         = c("56.11", "7.84"),
+  p_value    = c("< 0.001***", "0.049*")
+) %>%
+  gt() %>%
+  tab_header(
+    title    = "CYP2D6 metaboliser phenotype distribution",
+    subtitle = "Turkey cohort vs published European frequencies — chi-squared goodness of fit"
+  ) %>%
+  tab_spanner(label = "NM", columns = c(Turkey_NM, Europe_NM)) %>%
+  tab_spanner(label = "IM", columns = c(Turkey_IM, Europe_IM)) %>%
+  tab_spanner(label = "PM", columns = c(Turkey_PM, Europe_PM)) %>%
+  tab_spanner(label = "UM", columns = c(Turkey_UM, Europe_UM)) %>%
+  tab_spanner(label = "Chi-squared test", columns = c(X2, p_value)) %>%
+  cols_label(
+    Group     = "Group",
+    Turkey_NM = "Turkey", Europe_NM = "Europe",
+    Turkey_IM = "Turkey", Europe_IM = "Europe",
+    Turkey_PM = "Turkey", Europe_PM = "Europe",
+    Turkey_UM = "Turkey", Europe_UM = "Europe",
+    X2        = "X² (df=3)",
+    p_value   = "p-value"
+  ) %>%
+  tab_style(
+    style     = cell_text(weight = "bold"),
+    locations = cells_body(columns = p_value)
+  ) %>%
+  tab_style(
+    style     = cell_fill(color = "#f0f7ff"),
+    locations = cells_body(rows = 1)
+  ) %>%
+  tab_footnote("NM – normal metaboliser, IM – intermediate metaboliser, PM – poor metaboliser, UM – ultrarapid metaboliser.") %>%
+  tab_footnote("European frequencies sourced from Vallikivi et al. Table 1 (across cohorts): ALS PM=6.9%, IM=41.5%, NM=49.4%, UM=2.2%; Controls PM=6.2%, IM=39.6%, NM=52.5%, UM=1.7%.") %>%
+  tab_footnote("Turkey ALS cases n=601; Turkey controls n=144. *** p<0.001, * p<0.05.") %>%
+  tab_options(
+    table.font.names          = "Cambria",
+    heading.align             = "left",
+    column_labels.font.weight = "bold",
+    table.border.top.style    = "solid",
+    table.border.bottom.style = "solid",
+    table.font.size           = 12
+  )
+
+gtsave(results_gt, "turkey_vs_europe_chisq_table.png", zoom = 2)
+cat("Saved: turkey_vs_europe_chisq_table.png\n")
+```
+

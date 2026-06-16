@@ -1,0 +1,34 @@
+cat > /scratch/prj/mirocalstrial/remap_cyrius/run_bcyrius_kuwait.sh << 'EOF'
+#!/bin/bash
+#SBATCH --job-name=bcyrius_kuwait
+#SBATCH --partition=msc_appbio
+#SBATCH --array=1-20
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=0-4:00:00
+#SBATCH --output=/scratch/prj/mirocalstrial/remap_cyrius/logs/bcyrius_kuwait_%A_%a.out
+#SBATCH --error=/scratch/prj/mirocalstrial/remap_cyrius/logs/bcyrius_kuwait_%A_%a.err
+
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate bcyrius
+
+MANIFEST=/scratch/prj/mirocalstrial/remap_cyrius/hg38_bams/primary_manifest.txt
+OUT_DIR=/scratch/prj/mirocalstrial/remap_cyrius/bcyrius_kuwait_results
+
+INPUT_BAM=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$MANIFEST")
+SAMPLE=$(basename "$INPUT_BAM" _hg38.primary.bam)
+
+echo "[$(date)] Running BCyrius on: $SAMPLE"
+
+bcyrius \
+    --input "$INPUT_BAM" \
+    --genome chr38 \
+    --outDir "$OUT_DIR" \
+    --threads "$SLURM_CPUS_PER_TASK" \
+    --haplotype-info \
+    --population-info
+
+echo "[$(date)] Done: $SAMPLE"
+EOF
+
+sbatch /scratch/prj/mirocalstrial/remap_cyrius/run_bcyrius_kuwait.sh

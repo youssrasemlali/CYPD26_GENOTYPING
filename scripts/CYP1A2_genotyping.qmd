@@ -1,0 +1,165 @@
+---
+title: "CYP1A2_genotyping"
+format: html
+---
+# ============================================================
+# CYP1A2 Genotype Distribution Visualisation
+# Kuwaiti cohort (n=20) - Aldy v4.8.3 genotyping results
+# ============================================================
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(kableExtra)
+library(gt)
+
+# ------------------------------------------------------------
+# Colour-blind friendly palette (Okabe-Ito)
+# Safe for deuteranopia, protanopia, and tritanopia
+# ------------------------------------------------------------
+okabe_ito <- c("#E69F00","#0072B2","#CC79A7", "#999999")
+ 
+# ------------------------------------------------------------
+# 1. Load data
+# ------------------------------------------------------------
+# Update the path below to point to your downloaded TSV file
+cyp1a2 <- read.delim("all_samples_cyp1a2.tsv", sep = "\t", header = TRUE,
+                      stringsAsFactors = FALSE)
+ 
+# Quick check
+str(cyp1a2)
+table(cyp1a2$Genotype)
+```
+
+You can add options to executable code like this 
+
+```{r}
+# ------------------------------------------------------------
+# 2. Genotype distribution (bar chart of counts)
+# ------------------------------------------------------------
+genotype_counts <- cyp1a2 %>%
+  count(Genotype) %>%
+  mutate(Percentage = n / sum(n) * 100)
+
+n_genotypes <- nrow(genotype_counts)
+
+genotype_plot <- ggplot(genotype_counts, 
+                         aes(x = reorder(Genotype, -n), y = n, fill = Genotype)) +
+  geom_col(width = 0.6, colour = "black", linewidth = 0.4) +
+  geom_text(aes(label = paste0(n, " (", round(Percentage, 1), "%)")),
+            vjust = -0.6, size = 4, family = "serif") +
+  scale_fill_manual(values = okabe_ito[1:n_genotypes]) +
+  labs(
+    title = "CYP1A2 Genotype Distribution in Kuwaiti Cohort",
+    subtitle = "n = 20 ALS cases — Aldy v4.8.3 genotyping",
+    x = "Genotype",
+    y = "Number of Samples"
+  ) +
+  scale_y_continuous(limits = c(0, max(genotype_counts$n) + 3),
+                     breaks = scales::pretty_breaks()) +
+  theme_classic(base_size = 14, base_family = "serif") +
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.subtitle   = element_text(hjust = 0.5, size = 11, colour = "grey40"),
+    axis.text.x     = element_text(face = "bold", size = 11),
+    axis.text.y     = element_text(size = 10),
+    axis.title      = element_text(size = 12),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.3)
+  )
+
+print(genotype_plot)
+ggsave("cyp1a2_genotype_distribution.png", genotype_plot, 
+       width = 7, height = 5, dpi = 300)
+```
+
+
+```{r}
+# ------------------------------------------------------------
+# 3. Allele frequency (split genotypes into individual alleles)
+# ------------------------------------------------------------
+alleles <- cyp1a2 %>%
+  separate(Genotype, into = c("Allele1", "Allele2"), sep = "/") %>%
+  pivot_longer(cols = c(Allele1, Allele2), values_to = "Allele") %>%
+  count(Allele) %>%
+  mutate(Frequency = n / sum(n) * 100)
+
+n_alleles <- nrow(alleles)
+
+allele_plot <- ggplot(alleles, 
+                       aes(x = reorder(Allele, -Frequency), y = Frequency, fill = Allele)) +
+  geom_col(width = 0.5, colour = "black", linewidth = 0.4) +
+  geom_text(aes(label = paste0(round(Frequency, 1), "%")), 
+            vjust = -0.6, size = 4, family = "serif") +
+  scale_fill_manual(values = okabe_ito[1:n_alleles]) +
+  labs(
+    title = "CYP1A2 Allele Frequency in Kuwaiti Cohort",
+    subtitle = paste0("n = ", sum(alleles$n), " alleles (20 individuals, 2 alleles each)"),
+    x = "Allele",
+    y = "Allele Frequency (%)"
+  ) +
+  scale_y_continuous(limits = c(0, max(alleles$Frequency) + 10),
+                     breaks = scales::pretty_breaks()) +
+  theme_classic(base_size = 14, base_family = "serif") +
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.subtitle   = element_text(hjust = 0.5, size = 11, colour = "grey40"),
+    axis.text.x     = element_text(face = "bold", size = 11),
+    axis.text.y     = element_text(size = 10),
+    axis.title      = element_text(size = 12),
+    panel.grid.major.y = element_line(colour = "grey90", linewidth = 0.3)
+  )
+
+print(allele_plot)
+ggsave("cyp1a2_allele_frequency.png", allele_plot, 
+       width = 7, height = 5, dpi = 300)
+```
+
+```{r}
+# ------------------------------------------------------------
+# 4. Publication-style summary table
+# ------------------------------------------------------------
+
+summary_table <- data.frame(
+  Genotype          = c("*1/*1", "*1/*30", "*30/*30"),
+  `Sample Count`    = c(2, 7, 11),
+  `Frequency (%)`   = c(10, 35, 55),
+  check.names = FALSE
+)
+
+genotype_html <- summary_table %>%
+  kbl(
+    col.names = c("Genotype", "Sample Count", "Frequency (%)"),
+    align     = c("l", "c", "c"),
+    caption   = "Table. CYP1A2 genotype distribution in Kuwaiti ALS cohort"
+  ) %>%
+  kable_classic(full_width = FALSE, html_font = "Cambria") %>%
+  column_spec(1, width = "6cm") %>%
+  column_spec(2, width = "4cm") %>%
+  column_spec(3, width = "4cm") %>%
+  row_spec(0, bold = TRUE) %>%
+  kableExtra::footnote(
+    general = c(
+      "Genotyping performed using Aldy v4.8.3.",
+      "CYP1A2 is the primary enzyme responsible for riluzole metabolism."
+    ),
+    general_title     = "Note: ",
+    footnote_as_chunk = TRUE,
+    escape            = FALSE
+  )
+
+save_kable(genotype_html, "cyp1a2_genotype_summary_table.html")
+cat("Saved: cyp1a2_genotype_summary_table.html\n")
+
+
+```
+
+```{r}
+
+
+
+```
+

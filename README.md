@@ -79,7 +79,7 @@ the published European reference cohorts.
 
 ## Data Availability
 
-Clinical data used in this study are from **Project MinE**, subject to
+Raw sequencing and clinical metadata used in this study are from **Project MinE**, subject to
 institutional data-sharing agreements, and are not included in this repository.
 
 ---

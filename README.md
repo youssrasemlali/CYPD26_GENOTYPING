@@ -23,8 +23,8 @@ the published European reference cohorts.
 
 | Cohort | n | Design | Contributes to |
 |---|---|---|---|
-| **Turkey** | 601 ALS cases, 144 controls | Case-control + survival (26 deaths, 590 with follow-up) | Risk analysis, survival analysis, riluzole subset, allele frequencies |
-| **Kuwait** | 20 samples (18 after QC) | ALS cases only, no controls | Baseline characterisation, allele/genotype frequencies, CYP1A2 genotyping |
+| **Turkey** | 601 ALS cases, 144 controls | Case-control + survival (26 deaths, 590 with follow-up) | Baseline characterisation, Risk analysis, survival analysis, riluzole subset, allele frequencies |
+| **Kuwait** | 20 samples (18 after QC) | ALS cases only, no controls | Baseline characterisation, allele frequencies, CYP1A2 genotyping |
 
 ### Key Analyses
 

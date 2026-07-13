@@ -45,12 +45,6 @@ the published European reference cohorts.
 ## Repository Structure
 
 ```
-├── data/
-│   ├── README.md                # Expected input file structure (data not included)
-│   ├── turkey/                  # Turkey cohort CSVs (risk, survival, riluzole subset)
-│   ├── kuwait/                  # Kuwait cohort genotype + clinical data
-│   └── cyp1a2/                  # Compiled Aldy CYP1A2 output (Kuwait)
-│
 ├── scripts/
 │   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Turkey)
 │   ├── 02_run_cyrius.sh                       # CYP2D6 calling, hg19 (Turkey)

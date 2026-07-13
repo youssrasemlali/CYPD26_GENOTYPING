@@ -69,56 +69,6 @@ the published European reference cohorts.
 │
 └── README.md
 ```
-
-### Where to find things
-
-| Looking for... | Go to |
-|---|---|
-| CYP2D6 genotyping pipeline (BAM → star alleles) | `scripts/01`–`04` |
-| CYP1A2 genotyping pipeline | `scripts/05`–`06` |
-| ALS risk analysis (Turkey) | `scripts/07_risk_analysis_turkey.qmd` |
-| ALS survival analysis (Turkey) | `scripts/08_survival_analysis_turkey.qmd` |
-| Riluzole subgroup analysis | `scripts/09_riluzole_subset_analysis.qmd` |
-| Kuwait cohort baseline characteristics | `scripts/10_kuwait_baseline_characteristics.qmd` |
-| CYP2D6 allele frequency plots (both cohorts) | `scripts/11_cyp2d6_allele_lollipop_plot.r` |
-| Cross-cohort comparison vs published European data | `scripts/12_publication_figures_cross_cohort.r` |
-| Expected data file structure | `data/README.md` |
-| Generated tables  | `results/tables/` |
-| Generated figures | `results/plots/` |
-
----
-
-## Pipeline / Run Order
-
-The genotyping scripts (SLURM batch jobs, run on an HPC cluster) and the analysis
-scripts (Quarto/R, typically run interactively or rendered locally) are separate
-stages:
-
-**1. Genotyping (HPC, SLURM)**
-```bash
-sbatch scripts/01_qc_bams.sh              # Turkey — BAM QC
-sbatch scripts/02_run_cyrius.sh           # Turkey — CYP2D6 (Cyrius, hg19)
-sbatch scripts/03_remap_hg38_kuwait.sh    # Kuwait — remap to hg38 (run per batch)
-sbatch scripts/04_run_bcyrius_kuwait.sh   # Kuwait — CYP2D6 (BCyrius, hg38)
-sbatch scripts/05_run_cyp1a2_aldy.sh      # Kuwait — CYP1A2 (Aldy)
-```
-
-**2. Analysis (R / Quarto)**
-
-Run in numeric order — later scripts depend on objects created earlier in the same
-R session (e.g. `08` creates `df_survival`, which `09` and `11` build on):
-
-```r
-# render or source in order:
-06_cyp1a2_genotype_summary.qmd
-07_risk_analysis_turkey.qmd
-08_survival_analysis_turkey.qmd
-09_riluzole_subset_analysis.qmd
-10_kuwait_baseline_characteristics.qmd
-11_cyp2d6_allele_lollipop_plot.r
-12_publication_figures_cross_cohort.r
-```
-
 ---
 
 ## Reproducibility Notes

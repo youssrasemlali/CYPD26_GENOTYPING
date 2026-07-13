@@ -46,18 +46,18 @@ the published European reference cohorts.
 
 ```
 ├── scripts/
-│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Turkey)
-│   ├── 02_run_cyrius.sh                       # CYP2D6 calling, hg19 (Turkey)
+│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Kuwait)
+│   ├── 02_cyrius_script.sh                    # CYP2D6 calling, hg19 (Turkey+Kuwait)
 │   ├── 03_remap_hg38_kuwait.sh                # Remap + markdup to hg38 (Kuwait)
-│   ├── 04_run_bcyrius_kuwait.sh               # CYP2D6 calling, hg38 (Kuwait)
-│   ├── 05_run_cyp1a2_aldy.sh                  # CYP1A2 calling (Kuwait)
-│   ├── 06_cyp1a2_genotype_summary.qmd         # CYP1A2 genotype/allele plots + table
-│   ├── 07_risk_analysis_turkey.qmd            # Logistic regression — ALS risk
-│   ├── 08_survival_analysis_turkey.qmd        # Cox regression + KM curves — survival
-│   ├── 09_riluzole_subset_analysis.qmd        # Riluzole-user subgroup KM curves
-│   ├── 10_kuwait_baseline_characteristics.qmd # Kuwait baseline table
-│   ├── 11_cyp2d6_allele_lollipop_plot.r       # CYP2D6 allele frequency, both cohorts
-│   └── 12_publication_figures_cross_cohort.r  # Final figures Turkey vs UK/France/Pooled European
+│   ├── 04_bcyrius_script.sh                 # CYP2D6 calling, hg38 (Kuwait)
+│   ├── 05_cyp1a2_script.sh                  # CYP1A2 calling (Kuwait)
+│   ├── 06_cleaning_script.qmd         # Cleaning data according to SOP
+│   ├── 07_turkey_baseline.qmd                 #Turkey baseline table 
+│   ├── 08_risk_analysis_turkey.qmd        #  Logistic regression — ALS risk
+│   ├── 09_chiq_cohort_comparison analysis.qmd        # Riluzole-user subgroup KM curves
+│   ├── 10_survival_analysis.qmd            # Cox regression + KM curves — survival
+│   ├── 11_riluzole_subset_analysis.qmd       # Riluzole-user subgroup KM curves
+│   └── 12_kuwait_baseline_characteristics.qmd  # Kuwait baseline table Final figures Turkey vs UK/France/Pooled European
 │
 ├── results/
 │   ├── tables/                  # Comparison tables

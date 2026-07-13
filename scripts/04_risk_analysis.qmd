@@ -5,6 +5,8 @@ format: html
 
 ```{r}
 #load relevant libraries 
+library(dplyr)
+library(patchwork)
 install.packages("forestplot")
 library(forestplot)
 

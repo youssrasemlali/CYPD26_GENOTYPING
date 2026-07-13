@@ -46,14 +46,14 @@ the published European reference cohorts.
 
 ```
 ├── scripts/
-│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Turkey)
-│   ├── 02_cyrius_script.sh                    # CYP2D6 calling, hg19 (Turkey)
+│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Kuwait)
+│   ├── 02_cyrius_script.sh                    # CYP2D6 calling, hg19 (Turkey and Kuwait)
 │   ├── 03_remap_hg38_kuwait.sh                # Remap + markdup to hg38 (Kuwait)
 │   ├── 04_bcyrius_script.sh                   # CYP2D6 calling, hg38 (Kuwait)
 │   ├── 05_cyp1a2_script.sh                    # CYP1A2 calling (Kuwait)
 │   ├── 06_cleaning_script.qmd                 # Cleaning data according to SOP
 │   ├── 07_turkey_baseline.qmd                 # Turkey baseline table
-│   ├── 08_kuwait_baseline_characteristics.qmd # Kuwait baseline table
+│   ├── 08_kuwait_baseline.qmd                 # Kuwait baseline table
 │   ├── 09_cyp1a2_genotyping.qmd               # CYP1A2 genotype/allele plots + table (Kuwait)
 │   ├── 10_lollipop_plot_cyp2d6.r              # CYP2D6 allele frequency plots (both cohorts)
 │   ├── 11_chisq_cohort_comparison.qmd         # Chi-squared phenotype comparison, Turkey vs Europe

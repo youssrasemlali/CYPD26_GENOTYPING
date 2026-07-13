@@ -46,24 +46,27 @@ the published European reference cohorts.
 
 ```
 ├── scripts/
-│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Kuwait)
-│   ├── 02_cyrius_script.sh                    # CYP2D6 calling, hg19 (Turkey+Kuwait)
+│   ├── 01_qc_bams.sh                          # BAM QC pre-genotyping (Turkey)
+│   ├── 02_cyrius_script.sh                    # CYP2D6 calling, hg19 (Turkey)
 │   ├── 03_remap_hg38_kuwait.sh                # Remap + markdup to hg38 (Kuwait)
-│   ├── 04_bcyrius_script.sh                 # CYP2D6 calling, hg38 (Kuwait)
-│   ├── 05_cyp1a2_script.sh                  # CYP1A2 calling (Kuwait)
-│   ├── 06_cleaning_script.qmd         # Cleaning data according to SOP
-│   ├── 07_turkey_baseline.qmd                 #Turkey baseline table 
-│   ├── 08_risk_analysis_turkey.qmd        #  Logistic regression — ALS risk
-│   ├── 09_chiq_cohort_comparison analysis.qmd        # Riluzole-user subgroup KM curves
-│   ├── 10_survival_analysis.qmd            # Cox regression + KM curves — survival
-│   ├── 11_riluzole_subset_analysis.qmd       # Riluzole-user subgroup KM curves
-│   └── 12_kuwait_baseline_characteristics.qmd  # Kuwait baseline table Final figures Turkey vs UK/France/Pooled European
+│   ├── 04_bcyrius_script.sh                   # CYP2D6 calling, hg38 (Kuwait)
+│   ├── 05_cyp1a2_script.sh                    # CYP1A2 calling (Kuwait)
+│   ├── 06_cleaning_script.qmd                 # Cleaning data according to SOP
+│   ├── 07_turkey_baseline.qmd                 # Turkey baseline table
+│   ├── 08_kuwait_baseline_characteristics.qmd # Kuwait baseline table
+│   ├── 09_cyp1a2_genotyping.qmd               # CYP1A2 genotype/allele plots + table (Kuwait)
+│   ├── 10_lollipop_plot_cyp2d6.r              # CYP2D6 allele frequency plots (both cohorts)
+│   ├── 11_chisq_cohort_comparison.qmd         # Chi-squared phenotype comparison, Turkey vs Europe
+│   ├── 12_risk_analysis_turkey.qmd            # Logistic regression — ALS risk (Turkey)
+│   ├── 13_survival_analysis.qmd               # Cox regression + KM curves — survival (Turkey)
+│   ├── 14_riluzole_subset_analysis.qmd        # Riluzole-user subgroup KM curves (Turkey)
+│   ├── 15_diagnostic_delay.qmd                # Diagnostic delay analysis (Kuwait)
+│   └── 16_publication_figures_cross_cohort.r  # Final figures — Turkey vs UK/France/pooled European
 │
 ├── results/
 │   ├── tables/                  # Comparison tables
 │   └── plots/                   # Forest plots, KM curves, allele frequency plots
 │
-├── .gitignore
 └── README.md
 ```
 

@@ -68,6 +68,30 @@ the published European reference cohorts.
 │   └── plots/                   # Forest plots, KM curves, allele frequency plots
 │
 └── README.md
+
+├── scripts/
+│   ├── 01_qc_bams_.sh                              # BAM QC pre-genotyping (Turkey)
+│   ├── 02_cyrius_script.sh                         # CYP2D6 calling, hg19 (Turkey and Kuwait)
+│   ├── 03_remap_hg38.sh                            # Remap + markdup to hg38 (Kuwait)
+│   ├── 04_bcyrius_script                           # CYP2D6 calling, hg38 (Kuwait)
+│   ├── 05_cyp1a2_script.sh                         # CYP1A2 calling (Kuwait)
+│   ├── 06_cleaning_script.qmd                      # Cleaning data according to SOP
+│   ├── 07_turkey_baseline.r                        # Turkey baseline table
+│   ├── 08_risk_analysis.qmd                        # Logistic regression — ALS risk (Turkey)
+│   ├── 09_chisq_cohort_comparison.qmd     # Chi-squared phenotype comparison, Turkey vs Europe
+│   ├── 10_survival_analysis.qmd               # Cox regression + KM curves — survival (Turkey)
+│   ├── 11_riluzole_subset_analysis.qmd             # Riluzole-user subgroup KM curves (Turkey)
+│   ├── 12_kuwait_baseline_characteristics.qmd      # Kuwait baseline table
+│   ├── 13_diagnostic_delay.qmd                     # Diagnostic delay analysis (Kuwait)
+│   ├── 14_Lollipop_plot_of_CYP2D6_star_alleles.r # CYP2D6 allele frequency plots (both cohorts)
+│   ├── 15_CYP1A2_genotyping.qmd               # CYP1A2 genotype/allele plots + table (Kuwait)
+│   └── 16_publication_figures_cross_cohort.r  # Final figures — Turkey vs UK/France/pooled European
+│
+├── results/
+│   ├── tables/                  # Comparison tables
+│   └── plots/                   # Forest plots, KM curves, allele frequency plots
+│
+└── README.md
 ```
 ---
 
